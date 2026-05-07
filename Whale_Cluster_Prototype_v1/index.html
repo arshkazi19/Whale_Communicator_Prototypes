@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whale Decoder</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #090c10;
+    --surface: #0f1419;
+    --surface2: #151c24;
+    --border: rgba(255,255,255,0.07);
+    --border-hover: rgba(255,255,255,0.16);
+    --text: #dde4ec;
+    --muted: rgba(221,228,236,0.42);
+    --hint: rgba(221,228,236,0.2);
+    --accent: #3ecfb2;
+    --accent-dim: rgba(62,207,178,0.1);
+    --danger: #e2584a;
+    --mono: 'Space Mono', monospace;
+
+    --cat-place: #5b8dee;
+    --cat-greet: #3ecfb2;
+    --cat-excite: #f0a84a;
+    --cat-relate: #c47fd4;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 1.75rem 2.5rem;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 1.5rem;
+  }
+
+  header h1 {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  header p {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  main {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    flex: 1;
+  }
+
+  .panel {
+    padding: 2rem 2.5rem;
+    border-right: 0.5px solid var(--border);
+  }
+
+  .sidebar {
+    padding: 1.75rem 2rem;
+    overflow-y: auto;
+  }
+
+  .label {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--hint);
+    margin-bottom: 1rem;
+  }
+
+  /* ── record btn ── */
+  #recBtn {
+    width: 100%;
+    height: 60px;
+    background: transparent;
+    border: 0.5px solid var(--border-hover);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 1.25rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #recBtn:hover { background: var(--surface2); }
+
+  #recBtn.recording {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  #recBtn.recording::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(226,88,74,0.08);
+    animation: rpulse 1s ease-in-out infinite;
+  }
+
+  @keyframes rpulse { 0%,100%{opacity:0} 50%{opacity:1} }
+
+  /* ── waveform ── */
+  .wave-wrap {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 3px;
+    height: 88px;
+    display: flex;
+    align-items: center;
+    padding: 0 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  canvas { width: 100%; height: 60px; display: block; }
+
+  /* ── status ── */
+  #status {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    min-height: 18px;
+    margin-bottom: 1.75rem;
+  }
+  #status.ok { color: var(--accent); }
+  #status.err { color: var(--danger); }
+
+  /* ── translate btn ── */
+  #translateBtn {
+    width: 100%;
+    height: 50px;
+    background: transparent;
+    border: 0.5px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.2s;
+    margin-bottom: 2.5rem;
+  }
+
+  #translateBtn:hover:not(:disabled) { background: var(--accent-dim); }
+  #translateBtn:disabled { opacity: 0.2; cursor: not-allowed; border-color: var(--border-hover); color: var(--muted); }
+  #translateBtn.loading { animation: tblink 0.8s ease-in-out infinite; }
+  @keyframes tblink { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  /* ── result ── */
+  #resultWrap { display: none; }
+
+  .transcript-box {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 3px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text);
+    font-style: italic;
+  }
+
+  .transcript-box span {
+    display: block;
+    font-size: 10px;
+    font-style: normal;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--hint);
+    margin-bottom: 6px;
+  }
+
+  .category-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 2px;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 1.5rem;
+    border: 0.5px solid;
+  }
+
+  .category-pill.place_location  { color: var(--cat-place);  border-color: var(--cat-place);  background: rgba(91,141,238,0.08); }
+  .category-pill.greetings       { color: var(--cat-greet);  border-color: var(--cat-greet);  background: rgba(62,207,178,0.08); }
+  .category-pill.excitement      { color: var(--cat-excite); border-color: var(--cat-excite); background: rgba(240,168,74,0.08); }
+  .category-pill.relationships   { color: var(--cat-relate); border-color: var(--cat-relate); background: rgba(196,127,212,0.08); }
+
+  .scores-wrap {
+    margin-bottom: 1.75rem;
+  }
+
+  .score-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .score-name {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    width: 110px;
+    flex-shrink: 0;
+  }
+
+  .score-bar-bg {
+    flex: 1;
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 1px;
+    width: 0%;
+    transition: width 0.7s cubic-bezier(0.25,1,0.5,1);
+  }
+
+  .score-val {
+    font-size: 10px;
+    color: var(--hint);
+    min-width: 34px;
+    text-align: right;
+  }
+
+  /* ── whale card ── */
+  .whale-card {
+    border: 0.5px solid var(--border);
+    border-radius: 3px;
+    padding: 1.25rem;
+    background: var(--surface);
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.35s, transform 0.35s;
+  }
+
+  .whale-card.visible { opacity: 1; transform: translateY(0); }
+
+  .whale-card .wname {
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .play-btn {
+    background: transparent;
+    border: 0.5px solid var(--border-hover);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .play-btn:hover { border-color: var(--text); color: var(--text); }
+  .play-btn.playing { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+  .no-whale {
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* ── sidebar ── */
+  .cat-section {
+    margin-bottom: 1.75rem;
+  }
+
+  .cat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+  }
+
+  .cat-title {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .cat-title.place_location  { color: var(--cat-place); }
+  .cat-title.greetings       { color: var(--cat-greet); }
+  .cat-title.excitement      { color: var(--cat-excite); }
+  .cat-title.relationships   { color: var(--cat-relate); }
+
+  .upload-btn {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: transparent;
+    border: 0.5px solid var(--border-hover);
+    color: var(--muted);
+    padding: 4px 10px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .upload-btn:hover { border-color: var(--text); color: var(--text); }
+  .upload-btn input { display: none; }
+
+  .cat-files { min-height: 16px; }
+
+  .file-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 0.5px solid var(--border);
+    gap: 6px;
+  }
+
+  .file-row:last-child { border-bottom: none; }
+
+  .file-row .fname {
+    font-size: 10px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+
+  .del-btn {
+    background: none;
+    border: none;
+    color: var(--hint);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.15s;
+    padding: 0 3px;
+  }
+
+  .del-btn:hover { color: var(--danger); }
+
+  .empty-cat {
+    font-size: 10px;
+    color: var(--hint);
+    font-style: italic;
+    padding: 2px 0;
+  }
+
+  .divider {
+    height: 0.5px;
+    background: var(--border);
+    margin: 2rem 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Whale Decoder</h1>
+  <p>speak → transcribe → classify → whale</p>
+</header>
+
+<main>
+  <!-- LEFT: voice + result -->
+  <div class="panel">
+    <p class="label">Your voice</p>
+
+    <button id="recBtn">[ hold to record ]</button>
+
+    <div class="wave-wrap">
+      <canvas id="waveform" width="800" height="60"></canvas>
+    </div>
+
+    <div id="status">waiting —</div>
+
+    <button id="translateBtn" disabled>[ translate to whale ]</button>
+
+    <div id="resultWrap">
+      <p class="label">Translation</p>
+
+      <div class="transcript-box">
+        <span>you said</span>
+        <span id="transcriptText"></span>
+      </div>
+
+      <div id="categoryPill"></div>
+
+      <div class="scores-wrap" id="scoresWrap"></div>
+
+      <div class="whale-card" id="whaleCard">
+        <div class="wname" id="whaleName"></div>
+        <button class="play-btn" id="playBtn">play</button>
+      </div>
+
+      <div class="no-whale" id="noWhale" style="display:none">
+        no whale sounds in this category yet — upload some in the library
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: library -->
+  <div class="sidebar">
+    <p class="label">Whale library</p>
+    <div id="libraryWrap"></div>
+  </div>
+</main>
+
+<script>
+const API = 'http://localhost:5000/api';
+
+const CAT_COLORS = {
+  place_location: 'var(--cat-place)',
+  greetings:      'var(--cat-greet)',
+  excitement:     'var(--cat-excite)',
+  relationships:  'var(--cat-relate)',
+};
+
+const CAT_LABELS = {
+  place_location: 'place / location',
+  greetings:      'greetings',
+  excitement:     'excitement',
+  relationships:  'relationships',
+};
+
+// ── state ──────────────────────────────────────────────────────────────────
+let mediaRecorder, recordedChunks = [], audioCtx, analyser, animFrame;
+let recordedBlob = null;
+let isRecording = false;
+let currentAudio = null;
+
+// ── elements ───────────────────────────────────────────────────────────────
+const recBtn       = document.getElementById('recBtn');
+const translateBtn = document.getElementById('translateBtn');
+const statusEl     = document.getElementById('status');
+const canvas       = document.getElementById('waveform');
+const ctx          = canvas.getContext('2d');
+const resultWrap   = document.getElementById('resultWrap');
+const playBtn      = document.getElementById('playBtn');
+
+function setStatus(msg, mode = '') {
+  statusEl.textContent = msg + ' —';
+  statusEl.className = mode;
+}
+
+// ── waveform ───────────────────────────────────────────────────────────────
+function drawFlat() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height / 2);
+  ctx.lineTo(canvas.width, canvas.height / 2);
+  ctx.stroke();
+}
+
+function drawLive() {
+  const buf = new Uint8Array(analyser.frequencyBinCount);
+  function frame() {
+    animFrame = requestAnimationFrame(frame);
+    analyser.getByteTimeDomainData(buf);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#3ecfb2';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    const sw = canvas.width / buf.length;
+    for (let i = 0; i < buf.length; i++) {
+      const y = (buf[i] / 128) * (canvas.height / 2);
+      i === 0 ? ctx.moveTo(0, y) : ctx.lineTo(i * sw, y);
+    }
+    ctx.stroke();
+  }
+  frame();
+}
+
+async function drawRecorded(blob) {
+  const ab = await blob.arrayBuffer();
+  const ac = new AudioContext();
+  const decoded = await ac.decodeAudioData(ab);
+  const data = decoded.getChannelData(0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = 'rgba(221,228,236,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const step = Math.ceil(data.length / canvas.width);
+  for (let i = 0; i < canvas.width; i++) {
+    let min = 1, max = -1;
+    for (let j = 0; j < step; j++) {
+      const d = data[i * step + j] || 0;
+      if (d < min) min = d;
+      if (d > max) max = d;
+    }
+    ctx.moveTo(i, (1 + min) / 2 * canvas.height);
+    ctx.lineTo(i, (1 + max) / 2 * canvas.height);
+  }
+  ctx.stroke();
+}
+
+drawFlat();
+
+// ── recording ──────────────────────────────────────────────────────────────
+recBtn.addEventListener('mousedown', startRec);
+recBtn.addEventListener('touchstart', e => { e.preventDefault(); startRec(); });
+recBtn.addEventListener('mouseup', stopRec);
+recBtn.addEventListener('mouseleave', () => { if (isRecording) stopRec(); });
+recBtn.addEventListener('touchend', stopRec);
+
+async function startRec() {
+  if (isRecording) return;
+  isRecording = true;
+  recordedChunks = [];
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new AudioContext();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    audioCtx.createMediaStreamSource(stream).connect(analyser);
+    drawLive();
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      recordedBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+      cancelAnimationFrame(animFrame);
+      await drawRecorded(recordedBlob);
+      stream.getTracks().forEach(t => t.stop());
+      setStatus('recording ready', 'ok');
+      translateBtn.disabled = false;
+    };
+    mediaRecorder.start();
+    recBtn.classList.add('recording');
+    recBtn.textContent = '[ recording — release to stop ]';
+    setStatus('recording...', 'ok');
+  } catch(e) {
+    isRecording = false;
+    setStatus('mic access denied', 'err');
+  }
+}
+
+function stopRec() {
+  if (!isRecording) return;
+  isRecording = false;
+  recBtn.classList.remove('recording');
+  recBtn.textContent = '[ hold to record ]';
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+}
+
+// ── translate ──────────────────────────────────────────────────────────────
+translateBtn.addEventListener('click', async () => {
+  if (!recordedBlob) return;
+  translateBtn.disabled = true;
+  translateBtn.classList.add('loading');
+  translateBtn.textContent = '[ translating... ]';
+  resultWrap.style.display = 'none';
+  setStatus('transcribing your voice...', 'ok');
+
+  const form = new FormData();
+  form.append('audio', recordedBlob, 'voice.webm');
+
+  try {
+    const res = await fetch(`${API}/translate`, { method: 'POST', body: form });
+    const data = await res.json();
+
+    if (data.error) {
+      setStatus(data.error, 'err');
+    } else {
+      renderResult(data);
+      setStatus(`classified as: ${CAT_LABELS[data.category]}`, 'ok');
+    }
+  } catch(e) {
+    setStatus('could not reach server', 'err');
+  }
+
+  translateBtn.classList.remove('loading');
+  translateBtn.textContent = '[ translate to whale ]';
+  translateBtn.disabled = false;
+});
+
+function renderResult(data) {
+  document.getElementById('transcriptText').textContent = data.transcript;
+
+  const pill = document.getElementById('categoryPill');
+  pill.innerHTML = '';
+  const p = document.createElement('div');
+  p.className = `category-pill ${data.category}`;
+  p.textContent = CAT_LABELS[data.category] || data.category;
+  pill.appendChild(p);
+
+  // scores
+  const scoresWrap = document.getElementById('scoresWrap');
+  scoresWrap.innerHTML = '';
+  const sorted = Object.entries(data.scores).sort((a,b) => b[1]-a[1]);
+  sorted.forEach(([cat, score]) => {
+    const pct = Math.max(0, Math.min(1, (score + 1) / 2)) * 100;
+    const row = document.createElement('div');
+    row.className = 'score-row';
+    row.innerHTML = `
+      <span class="score-name">${CAT_LABELS[cat] || cat}</span>
+      <div class="score-bar-bg">
+        <div class="score-bar-fill" style="background:${CAT_COLORS[cat]};width:0%"></div>
+      </div>
+      <span class="score-val">${pct.toFixed(0)}%</span>
+    `;
+    scoresWrap.appendChild(row);
+    setTimeout(() => {
+      row.querySelector('.score-bar-fill').style.width = pct.toFixed(0) + '%';
+    }, 80);
+  });
+
+  const whaleCard = document.getElementById('whaleCard');
+  const noWhale   = document.getElementById('noWhale');
+
+  if (data.whale_file) {
+    document.getElementById('whaleName').textContent = data.whale_file;
+    whaleCard.style.display = '';
+    noWhale.style.display = 'none';
+    whaleCard.classList.remove('visible');
+    setTimeout(() => whaleCard.classList.add('visible'), 80);
+
+    playBtn.onclick = () => togglePlay(data.clip_url);
+    // auto-play
+    setTimeout(() => togglePlay(data.clip_url), 500);
+  } else {
+    whaleCard.style.display = 'none';
+    noWhale.style.display = '';
+  }
+
+  resultWrap.style.display = 'block';
+}
+
+function togglePlay(src) {
+  if (currentAudio && !currentAudio.paused) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    playBtn.textContent = 'play';
+    playBtn.classList.remove('playing');
+    currentAudio = null;
+    return;
+  }
+  const fullSrc = src.startsWith('http') ? src : `http://localhost:5000${src}`;
+  currentAudio = new Audio(fullSrc);
+  currentAudio.volume = 1.0;
+  playBtn.textContent = 'stop';
+  playBtn.classList.add('playing');
+  currentAudio.play().catch(e => {
+    console.error('Playback error:', e);
+    setStatus('playback error — check console', 'err');
+  });
+  currentAudio.onended = () => {
+    playBtn.textContent = 'play';
+    playBtn.classList.remove('playing');
+  };
+}
+
+// ── library ────────────────────────────────────────────────────────────────
+async function loadLibrary() {
+  try {
+    const res = await fetch(`${API}/library`);
+    const data = await res.json();
+    renderLibrary(data);
+  } catch(e) {
+    document.getElementById('libraryWrap').innerHTML =
+      '<p style="font-size:11px;color:var(--hint)">could not reach server</p>';
+  }
+}
+
+function renderLibrary(lib) {
+  const wrap = document.getElementById('libraryWrap');
+  wrap.innerHTML = '';
+
+  Object.entries(lib).forEach(([cat, files]) => {
+    const section = document.createElement('div');
+    section.className = 'cat-section';
+
+    const header = document.createElement('div');
+    header.className = 'cat-header';
+
+    const title = document.createElement('span');
+    title.className = `cat-title ${cat}`;
+    title.textContent = CAT_LABELS[cat] || cat;
+
+    const uploadLabel = document.createElement('label');
+    uploadLabel.className = 'upload-btn';
+    uploadLabel.innerHTML = `+ add<input type="file" accept="audio/*" multiple>`;
+    uploadLabel.querySelector('input').addEventListener('change', async e => {
+      const form = new FormData();
+      Array.from(e.target.files).forEach(f => form.append('files', f));
+      await fetch(`${API}/library/upload/${cat}`, { method: 'POST', body: form });
+      loadLibrary();
+      e.target.value = '';
+    });
+
+    header.appendChild(title);
+    header.appendChild(uploadLabel);
+
+    const fileList = document.createElement('div');
+    fileList.className = 'cat-files';
+
+    if (!files.length) {
+      fileList.innerHTML = '<p class="empty-cat">no files yet</p>';
+    } else {
+      files.forEach(fname => {
+        const row = document.createElement('div');
+        row.className = 'file-row';
+        row.innerHTML = `<span class="fname">${fname}</span><button class="del-btn" title="remove">×</button>`;
+        row.querySelector('.del-btn').addEventListener('click', async () => {
+          await fetch(`${API}/library/delete/${cat}/${encodeURIComponent(fname)}`, { method: 'DELETE' });
+          loadLibrary();
+        });
+        fileList.appendChild(row);
+      });
+    }
+
+    section.appendChild(header);
+    section.appendChild(fileList);
+    wrap.appendChild(section);
+
+    if (Object.keys(lib).indexOf(cat) < Object.keys(lib).length - 1) {
+      const div = document.createElement('div');
+      div.className = 'divider';
+      wrap.appendChild(div);
+    }
+  });
+}
+
+loadLibrary();
+</script>
+</body>
+</html>
