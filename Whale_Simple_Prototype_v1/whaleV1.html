@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WHALE SIRI | LOCAL</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            background: #000; 
+            color: #fff; 
+            font-family: 'Courier New', Courier, monospace; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            overflow: hidden; 
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #status { 
+            font-size: 11px; 
+            margin-bottom: 30px; 
+            height: 20px;
+            color: #888;
+        }
+        
+        /* Minimalist Orb: A 1px white circle */
+        #orb { 
+            width: 120px; 
+            height: 120px; 
+            border: 1px solid #fff; 
+            border-radius: 50%; 
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Recording State */
+        #orb.recording { 
+            background: #fff; 
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
+        }
+
+        #instructions { 
+            margin-top: 50px; 
+            font-size: 10px; 
+            color: #444; 
+        }
+
+        /* Hidden but accessible controls */
+        #upload-btn {
+            position: absolute;
+            bottom: 20px;
+            border: 1px solid #222;
+            background: none;
+            color: #444;
+            padding: 8px 15px;
+            font-size: 9px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        #upload-btn:hover { color: #fff; border-color: #fff; }
+    </style>
+</head>
+<body>
+
+    <input type="file" id="audio-upload" accept="audio/*" style="display:none">
+    <div id="status">System Standby</div>
+    <div id="orb"></div>
+    <div id="instructions">Hold [Space] to transmit</div>
+    
+    <button id="upload-btn" onclick="document.getElementById('audio-upload').click()">Load Field Recording</button>
+
+    <script>
+        let audioCtx, whaleBuffer, mediaRecorder, stream;
+        let audioChunks = [];
+
+        const orb = document.getElementById('orb');
+        const statusEl = document.getElementById('status');
+        const uploadInput = document.getElementById('audio-upload');
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        uploadInput.onchange = async (e) => {
+            initAudio();
+            const file = e.target.files[0];
+            if (!file) return;
+            statusEl.textContent = "Decoding Currents...";
+            const arrayBuffer = await file.arrayBuffer();
+            whaleBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            statusEl.textContent = "Acoustics Mapped";
+            setTimeout(() => { statusEl.textContent = "Ready"; }, 2000);
+        };
+
+        function playWhaleResponse() {
+            if (!whaleBuffer) {
+                statusEl.textContent = "Error: No Audio Loaded";
+                return;
+            }
+
+            const source = audioCtx.createBufferSource();
+            const gainNode = audioCtx.createGain();
+            
+            // LOW-PASS FILTER: Isolate deep whale frequencies (~20Hz - 800Hz)
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = "lowpass";
+            filter.frequency.value = 600; 
+
+            source.buffer = whaleBuffer;
+            const duration = 5;
+            // Picking a random starting point
+            const startTime = Math.random() * (whaleBuffer.duration - duration);
+
+            source.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+            // Smooth volume ramp
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(0.7, now + 1);
+            gainNode.gain.setValueAtTime(0.7, now + 4);
+            gainNode.gain.linearRampToValueAtTime(0, now + 5);
+
+            source.start(now, startTime, duration);
+            statusEl.textContent = "Receiving...";
+            setTimeout(() => { statusEl.textContent = "Ready"; }, 5000);
+        }
+
+        // Spacebar Logic (Push-to-Talk)
+        window.addEventListener('keydown', async (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault(); // FIX: Prevents focus jumping and explorer opening
+                
+                if (!mediaRecorder) {
+                    initAudio();
+                    statusEl.textContent = "Transmitting...";
+                    orb.classList.add('recording');
+                    
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        mediaRecorder = new MediaRecorder(stream);
+                        audioChunks = [];
+                        mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
+                        mediaRecorder.start();
+                    } catch (err) {
+                        statusEl.textContent = "Mic Error";
+                        orb.classList.remove('recording');
+                    }
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space' && mediaRecorder) {
+                mediaRecorder.stop();
+                stream.getTracks().forEach(track => track.stop());
+                mediaRecorder = null;
+                orb.classList.remove('recording');
+                
+                // Trigger whale response after a short dramatic pause
+                setTimeout(playWhaleResponse, 500);
+            }
+        });
+    </script>
+</body>
+</html>
